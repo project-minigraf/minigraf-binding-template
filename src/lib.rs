@@ -180,4 +180,11 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(&json).expect("valid json");
         assert_eq!(v["results"][0][0], "Alice");
     }
+
+    #[test]
+    fn execute_invalid_datalog_returns_err() {
+        let db = MiniGrafDb::open_in_memory().expect("open");
+        let result = db.execute("this is not datalog".into());
+        assert!(result.is_err());
+    }
 }
