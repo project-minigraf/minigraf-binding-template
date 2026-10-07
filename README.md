@@ -7,7 +7,8 @@ Template repository for building a new [Minigraf](https://github.com/project-min
 | File | Purpose |
 |---|---|
 | `Cargo.toml` | Rust shim crate — depends on `minigraf` core, produces a cdylib |
-| `src/lib.rs` | UniFFI scaffolding with comments at every extension point |
+| `src/lib.rs` | The UniFFI shim shared by the Python, Java, Android and Swift bindings: open options, query cursors, the fact log and the log writer |
+| `uniffi.toml` | Kotlin renames for the shim's `close()` methods |
 | `src/uniffi_bindgen.rs` | Entry point for the `uniffi-bindgen` CLI binary |
 | `.github/workflows/ci.yml` | Starter CI — runs `cargo test` |
 
@@ -28,6 +29,21 @@ Template repository for building a new [Minigraf](https://github.com/project-min
 6. Add a `release.yml` that receives the `core-release` repository_dispatch event from
    the minigraf cascade, pins the new `minigraf` version in `Cargo.toml`, commits, tags,
    and publishes your artifact.
+
+## The shared surface
+
+Every binding exposes the same objects, specified in minigraf's
+[`docs/superpowers/specs/2026-10-07-binding-etl-surface-design.md`](https://github.com/project-minigraf/minigraf/blob/v3/docs/superpowers/specs/2026-10-07-binding-etl-surface-design.md):
+
+- `MiniGrafDb.open_with_options(path, OpenOptions)`, `query()` → `MiniGrafCursor`,
+  `fact_log(FactFilter)` → `MiniGrafFactLog`, `current_tx_count()`;
+- `MiniGrafLogWriter` (`create`, `append`, `append_batch`, `advance_tx_count`,
+  `tx_count`, `finish`, `close`, `is_open`);
+- `FactRecord` with a lossless `MiniGrafValue`; counts are signed 64-bit integers
+  because Kotlin's unsigned types cannot be called from Java.
+
+Add the language's idioms on top (an iterator over cursors and fact logs, a scoped
+writer), and test them in the language: see `minigraf-python/tests/test_etl.py`.
 
 ## Why not depend on `minigraf-ffi`?
 

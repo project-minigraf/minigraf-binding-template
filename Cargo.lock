@@ -439,9 +439,8 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
 name = "minigraf"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b1bcddc6526cad5055e0950fd1ae6e326f1e8e8d8478fb4d0c5225faf033a20"
+version = "2.0.3"
+source = "git+https://github.com/project-minigraf/minigraf?rev=97cd4a2a85301ea3478250dd654139d45a1f7cd0#97cd4a2a85301ea3478250dd654139d45a1f7cd0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -456,7 +455,6 @@ dependencies = [
 name = "minigraf-binding-example"
 version = "0.0.0"
 dependencies = [
- "anyhow",
  "minigraf",
  "serde_json",
  "thiserror",
