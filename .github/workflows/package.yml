@@ -1,0 +1,44 @@
+name: Package
+
+# The only place this binding's artifacts are built. ci.yml calls it on every
+# PR, and the release's `test` job calls ci.yml with the release version, so
+# the files that are consumer-tested are the files that are published.
+#
+# TODO(binding): replace the job below with your real packaging (wheel, jar,
+# AAR, npm tarball, xcframework, archive...), stamped with `inputs.version`,
+# and upload each artifact as dist-<name>. Check the artifact's contents here
+# (the native library, the generated bindings, LICENSE-MIT and LICENSE-APACHE):
+# a packager can succeed and leave a file out. As a placeholder it builds the
+# shim's cdylib and uploads it as dist-native.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: false
+        type: string
+        default: ''
+      version:
+        required: true
+        type: string
+
+jobs:
+  native:
+    name: Build the native library
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      - name: Stage the artifact
+        run: |
+          mkdir dist
+          cp target/release/libminigraf_ffi.so LICENSE-MIT LICENSE-APACHE dist/
+          echo "${{ inputs.version }}" > dist/VERSION
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-native
+          path: dist/
+          if-no-files-found: error
