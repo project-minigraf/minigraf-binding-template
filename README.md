@@ -9,7 +9,11 @@ Template repository for building a new [Minigraf](https://github.com/project-min
 | `Cargo.toml` | Rust shim crate — depends on `minigraf` core, produces a cdylib |
 | `src/lib.rs` | UniFFI scaffolding with comments at every extension point |
 | `src/uniffi_bindgen.rs` | Entry point for the `uniffi-bindgen` CLI binary |
-| `.github/workflows/ci.yml` | Starter CI — runs `cargo test` |
+| `.github/workflows/ci.yml` | CI: `cargo test`, then package, consumer test and readme-sync |
+| `.github/workflows/package.yml` | The only place artifacts are built (placeholder: the cdylib) |
+| `.github/workflows/verify-published.yml` | Post-publish consumer test from the registry; opens a `release-broken` issue on failure |
+| `consumer-test/run.sh` | Installs the artifacts into an empty project and runs the quick start and the contract |
+| `consumer-test/readme_sync.py` | Checks that the README quick start is what the consumer test runs (canonical copy) |
 
 ## Creating a new binding
 
@@ -25,9 +29,44 @@ Template repository for building a new [Minigraf](https://github.com/project-min
      --language <kotlin|swift|python|...> \
      --out-dir <output-dir>/
    ```
-6. Add a `release.yml` that receives the `core-release` repository_dispatch event from
+6. Fill in the packaging and the consumer test (next section).
+7. Add a `release.yml` that receives the `core-release` repository_dispatch event from
    the minigraf cascade, pins the new `minigraf` version in `Cargo.toml`, commits, tags,
-   and publishes your artifact.
+   and publishes your artifact, wired as described below.
+
+## Packaging and the consumer test
+
+Every binding proves, on every PR and in every release, that its package installs and
+works the way a user installs it. Search for `TODO(binding)` to find every placeholder.
+
+1. **`package.yml`** builds each artifact exactly as it is published, stamped with the
+   `version` input (`0.0.0-ci` on PRs), checks its contents (native library, generated
+   bindings, `LICENSE-MIT`, `LICENSE-APACHE`) and uploads it as `dist-<name>`. Nothing else
+   builds release artifacts.
+2. **`consumer-test/run.sh local <dist> <version>`** installs those artifacts into a fresh
+   temporary project with the package manager, then runs `consumer-test/quickstart.<ext>`
+   (the README quick start) and a contract test: in memory, file-backed with a reopen, the
+   error type with its code, and the installed version. `registry <version>` does the same
+   from the public registry, waiting up to 10 minutes for the version to appear. Resolve
+   the dist path before `cd`, and pass relative paths to tools on Windows.
+3. **`README.md`** gets a `## Quick start` section. readme-sync takes its first code block
+   and requires every non-blank line, trimmed, to appear in the same order in
+   `consumer-test/quickstart.<ext>`. The consumer may add imports, a wrapper and assertions
+   around them. Set the file name in `ci.yml`. If the README covers more than one package,
+   pass the section heading as a third argument.
+4. **`ci.yml`**: one `consumer` leg per platform you publish for, downloading the matching
+   `dist-<name>`.
+5. **`release.yml`**:
+   - the `test` job calls `ci.yml` with the pinned `sha` as `ref` and the release version as
+     `version`, so the artifacts are built and consumer-tested before anything is tagged;
+   - `publish` downloads `dist-*` from the same run and uploads exactly those files, never a
+     rebuild, and skips a version the registry already has, so re-runs are safe;
+   - a last job calls `verify-published.yml` with the version and the release tag.
+6. **`verify-published.yml`**: the same matrix in registry mode. On failure it opens (or
+   comments on) an issue labelled `release-broken`, and the run fails. Run it by hand with
+   `gh workflow run verify-published.yml -f version=<x.y.z>`.
+
+The canonical `readme_sync.py` lives here; copy it unchanged.
 
 ## Why not depend on `minigraf-ffi`?
 
