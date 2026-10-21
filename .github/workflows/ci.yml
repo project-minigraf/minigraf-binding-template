@@ -4,11 +4,74 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref to test (release.yml passes the pinned release sha)'
+        required: false
+        type: string
+        default: ''
+      version:
+        description: 'Version stamped into the artifacts (release.yml passes the release version)'
+        required: false
+        type: string
+        default: '0.0.0-ci'
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test
+
+  # Builds the artifacts exactly as the release publishes them.
+  package:
+    name: Package
+    uses: ./.github/workflows/package.yml
+    with:
+      ref: ${{ inputs.ref }}
+      version: ${{ inputs.version || '0.0.0-ci' }}
+
+  # Installs the built artifacts into an empty project, the way a user does,
+  # and runs the README quick start and the consumer contract.
+  # TODO(binding): one leg per platform you publish for.
+  consumer:
+    name: Consumer test (${{ matrix.os }})
+    needs: package
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-native
+          path: dist-native
+      - name: Run consumer test
+        shell: bash
+        run: bash consumer-test/run.sh local dist-native ${{ inputs.version || '0.0.0-ci' }}
+
+  readme-sync:
+    name: README quick start matches the consumer test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Check the README quick start
+        run: |
+          # The template has no language yet; a binding made from it must
+          # have consumer-test/quickstart.<ext> and a "## Quick start" block.
+          if [ "$GITHUB_REPOSITORY" = project-minigraf/minigraf-binding-template ]; then
+            echo "::notice::template repository: no quick start to check"
+            exit 0
+          fi
+          # TODO(binding): set the extension of your quick start file.
+          python3 -I consumer-test/readme_sync.py README.md consumer-test/quickstart.EXT
