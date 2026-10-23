@@ -18,7 +18,9 @@ Template repository for building a new [Minigraf](https://github.com/project-min
 ## Creating a new binding
 
 1. Click **Use this template** on GitHub to create your repo under `project-minigraf/<language>`.
-2. Update `Cargo.toml`: rename the crate, pin `minigraf` to the version you're targeting.
+2. Update `Cargo.toml`: rename the crate, pin `minigraf` exactly to the version you're targeting
+   (`minigraf = "=2.x.y"`). Bindings map errors via `minigraf::MinigrafError::category()`;
+   its message carries the stable error code (`[PRS-001] ...`).
 3. Run `cargo test` to verify the Rust layer compiles and tests pass.
 4. Add your language tooling (e.g. `java/`, `android/`, `Sources/`, etc.).
 5. Generate language bindings with `uniffi-bindgen`:

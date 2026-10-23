@@ -2,7 +2,7 @@
 //!
 //! CUSTOMISATION GUIDE:
 //! 1. Rename the crate in Cargo.toml (name, description).
-//! 2. Pin minigraf to the version you want to bind.
+//! 2. Pin minigraf to the exact version you want to bind (`minigraf = "=2.x.y"`).
 //! 3. Implement any extra error variants or wrapper types your language needs.
 //! 4. Add your language tooling (e.g. java/, android/, Sources/, etc.).
 //! 5. Wire up a release.yml that receives `core-release` dispatch from
@@ -47,22 +47,22 @@ pub enum MiniGrafError {
     Other { msg: String },
 }
 
-impl From<anyhow::Error> for MiniGrafError {
-    fn from(e: anyhow::Error) -> Self {
-        let full = format!("{e:#}").to_lowercase();
+// minigraf v2 returns a typed `MinigrafError`: map on its category, not on
+// message text. Its Display carries the stable code ("[PRS-001] ..."), so the
+// message each variant holds does too.
+impl From<minigraf::MinigrafError> for MiniGrafError {
+    fn from(e: minigraf::MinigrafError) -> Self {
         let msg = e.to_string();
-        if full.contains("parse")
-            || full.contains("unexpected")
-            || full.contains("expected token")
-            || full.contains("unknown command")
-        {
-            MiniGrafError::Parse { msg }
-        } else if full.contains("storage") || full.contains(" page") || full.contains("wal ") {
-            MiniGrafError::Storage { msg }
-        } else if full.contains("query") || full.contains(":find") || full.contains(":where") {
-            MiniGrafError::Query { msg }
-        } else {
-            MiniGrafError::Other { msg }
+        match e.category() {
+            minigraf::ErrorCategory::Parser => MiniGrafError::Parse { msg },
+            minigraf::ErrorCategory::Storage | minigraf::ErrorCategory::Wal => {
+                MiniGrafError::Storage { msg }
+            }
+            minigraf::ErrorCategory::Query => MiniGrafError::Query { msg },
+            // ErrorCategory is #[non_exhaustive]: new categories land here.
+            minigraf::ErrorCategory::Api | minigraf::ErrorCategory::Internal | _ => {
+                MiniGrafError::Other { msg }
+            }
         }
     }
 }
@@ -182,9 +182,38 @@ mod tests {
     }
 
     #[test]
-    fn execute_invalid_datalog_returns_err() {
+    fn execute_invalid_datalog_returns_parse_error_with_code() {
         let db = MiniGrafDb::open_in_memory().expect("open");
-        let result = db.execute("this is not datalog".into());
-        assert!(result.is_err());
+        let result = db.execute("this is not datalog !!!".into());
+        match result {
+            Err(MiniGrafError::Parse { msg }) => {
+                assert!(msg.starts_with("[PRS-"), "expected error code in {msg:?}");
+            }
+            other => panic!("expected Parse error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn open_file_backed_roundtrip() {
+        let dir = std::env::temp_dir().join(format!("minigraf_template_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("test.graph");
+        let path_str = path.to_str().expect("utf8 path").to_string();
+
+        {
+            let db = MiniGrafDb::open(path_str.clone()).expect("open");
+            db.execute(r#"(transact [[:alice :name "Alice"]])"#.into())
+                .expect("transact");
+            db.checkpoint().expect("checkpoint");
+        }
+
+        let db = MiniGrafDb::open(path_str).expect("reopen");
+        let json = db
+            .execute(r#"(query [:find ?n :where [?e :name ?n]])"#.into())
+            .expect("query");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("valid json");
+        assert_eq!(v["results"][0][0], "Alice");
+        drop(db);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
