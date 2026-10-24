@@ -86,6 +86,10 @@ Every binding exposes the same objects, specified in minigraf's
   each language adds plain host values on top (§4.2);
 - `FactRecord` with a lossless `MiniGrafValue`; counts are signed 64-bit integers
   because Kotlin's unsigned types cannot be called from Java;
+- `MiniGrafValue::Set { value }`: a set value's elements in canonical order, in query
+  results' typed forms, fact records and bind values; an element that is a set is
+  `API-021`. `execute()` JSON returns a set as an array. Each language accepts its
+  native set type as a plain bind value (minigraf#316);
 - `MiniGrafError` variants by core error category: `Storage`, `Query`, `Parse`,
   `Api` (bad arguments, closed objects, bind mistakes) and `Other` (internal).
 
