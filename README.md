@@ -7,7 +7,7 @@ Template repository for building a new [Minigraf](https://github.com/project-min
 | File | Purpose |
 |---|---|
 | `Cargo.toml` | Rust shim crate — depends on `minigraf` core, produces a cdylib |
-| `src/lib.rs` | The UniFFI shim shared by the Python, Java, Android and Swift bindings: open options, query cursors, the fact log and the log writer |
+| `src/lib.rs` | The UniFFI shim shared by the Python, Java, Android and Swift bindings: open options, query cursors, prepared queries, the fact log and the log writer |
 | `uniffi.toml` | Kotlin renames for the shim's `close()` methods |
 | `src/uniffi_bindgen.rs` | Entry point for the `uniffi-bindgen` CLI binary |
 | `.github/workflows/ci.yml` | CI: `cargo test`, then package, consumer test and readme-sync |
@@ -78,8 +78,16 @@ Every binding exposes the same objects, specified in minigraf's
   `fact_log(FactFilter)` → `MiniGrafFactLog`, `current_tx_count()`;
 - `MiniGrafLogWriter` (`create`, `append`, `append_batch`, `advance_tx_count`,
   `tx_count`, `finish`, `close`, `is_open`);
+- `MiniGrafDb.prepare(text)` → `MiniGrafPreparedQuery`, with `execute(bindings)` (JSON)
+  and `query(bindings)` (`MiniGrafCursor`); bindings are a map from slot name (no `$`)
+  to `MiniGrafBindValue` (`Value`, `Entity`, `TxCount`, `Timestamp`, `AnyValidTime`).
+  A prepared query keeps its database open until both are freed. Specified in
+  [`docs/superpowers/specs/2026-10-24-prepared-query-ffi-design.md`](https://github.com/project-minigraf/minigraf/blob/v3/docs/superpowers/specs/2026-10-24-prepared-query-ffi-design.md);
+  each language adds plain host values on top (§4.2);
 - `FactRecord` with a lossless `MiniGrafValue`; counts are signed 64-bit integers
-  because Kotlin's unsigned types cannot be called from Java.
+  because Kotlin's unsigned types cannot be called from Java;
+- `MiniGrafError` variants by core error category: `Storage`, `Query`, `Parse`,
+  `Api` (bad arguments, closed objects, bind mistakes) and `Other` (internal).
 
 Add the language's idioms on top (an iterator over cursors and fact logs, a scoped
 writer), and test them in the language: see `minigraf-python/tests/test_etl.py`.
