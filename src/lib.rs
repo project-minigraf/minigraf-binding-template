@@ -1320,9 +1320,24 @@ mod tests {
             .expect("prepare");
         api(err(pq.execute(binds(&[]))), "[API-022]");
         api(err(pq.query(binds(&[]))), "[API-022]");
+        for wrong in [
+            pq.execute(binds(&[("n", MiniGrafBindValue::TxCount { value: 1 })]))
+                .map(|_| ()),
+            pq.query(binds(&[("n", MiniGrafBindValue::TxCount { value: 1 })]))
+                .map(|_| ()),
+        ] {
+            api(err(wrong), "[API-024]");
+        }
         api(
-            err(pq.execute(binds(&[("n", MiniGrafBindValue::TxCount { value: 1 })]))),
-            "[API-024]",
+            err(pq.query(binds(&[(
+                "n",
+                MiniGrafBindValue::Value {
+                    value: MiniGrafValue::Ref {
+                        value: "not-a-uuid".into(),
+                    },
+                },
+            )]))),
+            "[API-017]",
         );
         api(
             err(db.prepare("(query [:find ?v :where [?e $a ?v]])".into())),
