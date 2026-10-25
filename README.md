@@ -92,9 +92,51 @@ Every binding exposes the same objects, specified in minigraf's
   native set type as a plain bind value (minigraf#316);
 - `MiniGrafError` variants by core error category: `Storage`, `Query`, `Parse`,
   `Api` (bad arguments, closed objects, bind mistakes) and `Other` (internal).
+- `MiniGrafDb.register_predicate(name, MiniGrafPredicate)` and
+  `register_aggregate(name, MiniGrafAggregate)`: user functions written in the language
+  (minigraf#180), described in the next section.
 
 Add the language's idioms on top (an iterator over cursors and fact logs, a scoped
 writer), and test them in the language: see `minigraf-python/tests/test_etl.py`.
+
+## User functions
+
+Specified in minigraf's
+[`docs/superpowers/specs/2026-10-24-udf-uniffi-design.md`](https://github.com/project-minigraf/minigraf/blob/v3/docs/superpowers/specs/2026-10-24-udf-uniffi-design.md)
+§6. Copy this section into the binding's README with the language's own example.
+
+- A predicate implements `MiniGrafPredicate.test(value) -> bool` and is called in Datalog
+  as `[(name ?v)]`. An aggregate implements `MiniGrafAggregate.accumulator()`, which
+  returns a new `MiniGrafAccumulator` (`step(value)`, `finish(count)`) for each group or
+  window partition, and is used as `(name ?v)` in `:find` or with `:over`.
+- **Failures.** A callback that throws stops the query with `QRY-014`, raised as
+  `MiniGrafError.Query`; it is never read as `false` or a missing value. Throw
+  `MiniGrafUdfError.Failed(msg)` to choose the message. Any other exception also fails the
+  call, with its first line (class and message) as the message. A `Ref` from `finish`
+  whose value is not a UUID is a failing call too.
+- **Lifecycle.** The database keeps a strong reference to each registered object until
+  the database and every cursor and prepared query opened from it are dropped. There is
+  no unregister. Predicates and aggregates have separate names, and registering a name
+  twice in either is an error (`INT-040`). A query sees the functions
+  registered when it opened.
+- **Threading.** A callback runs on the thread that calls `execute` (of the database or
+  a prepared query) or a cursor's `next_batch`, including a prepared query's cursor. Queries on different threads may call the same object at
+  once, so it must be thread-safe. One accumulator is used by one query on one thread at
+  a time.
+- **Cost.** Each call crosses the FFI once: one foreign call per value.
+- **Re-entry.** A callback may query the same database, open a cursor or register another
+  function. Inside a write transaction, the calls the core refuses there still return
+  `INT-001`. No binding lock is held while the core runs: each `MiniGrafDb` method locks
+  its handle only to clone the database.
+
+What each generator produces (UniFFI 0.31.1; the traits need `#[uniffi::export(with_foreign)]`,
+without which they are not implementable outside Rust):
+
+| Language | Implement | Throwing |
+|---|---|---|
+| Python | subclass `MiniGrafPredicate` / `MiniGrafAggregate` / `MiniGrafAccumulator` | raise `MiniGrafUdfError.Failed(msg)`, or any exception. UniFFI's ctypes calls release the GIL; the callback re-acquires it |
+| Kotlin | `interface MiniGrafPredicate` etc. (`MiniGrafPredicateImpl` is the Rust-side class) | the interfaces carry no `@Throws`: Kotlin throws `MiniGrafUdfException.Failed(msg)`; Java, which cannot throw that checked exception from them, throws an unchecked exception instead |
+| Swift | `protocol MiniGrafPredicate: AnyObject, Sendable` etc. | the methods are `throws`: throw `MiniGrafUdfError.Failed(msg:)`. An implementation is a class that is `Sendable` (immutable `final`, or `@unchecked Sendable` with its own locking) |
 
 ## Why not depend on `minigraf-ffi`?
 
