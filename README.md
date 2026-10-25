@@ -116,10 +116,11 @@ Specified in minigraf's
   whose value is not a UUID is a failing call too.
 - **Lifecycle.** The database keeps a strong reference to each registered object until
   the database and every cursor and prepared query opened from it are dropped. There is
-  no unregister, and registering a name twice is an error (`INT-040`). A query sees the functions
+  no unregister. Predicates and aggregates have separate names, and registering a name
+  twice in either is an error (`INT-040`). A query sees the functions
   registered when it opened.
-- **Threading.** A callback runs on the thread that calls `execute`, `next_batch` or a
-  prepared query's `execute`. Queries on different threads may call the same object at
+- **Threading.** A callback runs on the thread that calls `execute` (of the database or
+  a prepared query) or a cursor's `next_batch`, including a prepared query's cursor. Queries on different threads may call the same object at
   once, so it must be thread-safe. One accumulator is used by one query on one thread at
   a time.
 - **Cost.** Each call crosses the FFI once: one foreign call per value.

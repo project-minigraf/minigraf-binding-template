@@ -564,6 +564,7 @@ impl MiniGrafDb {
                 Ok(acc.step(MiniGrafValue::from(v.clone()))?)
             },
             |acc, count| {
+                // A count of values held in memory stays far below i64::MAX.
                 let count = i64::try_from(count).unwrap_or(i64::MAX);
                 acc.finish(count)?
                     .to_core()
@@ -1778,6 +1779,19 @@ mod tests {
             .execute("(query [:find ?n :where [?e :n ?n] [(late? ?n)]])".into())
             .expect("registered from inside the call");
         assert_eq!(results(&later).len(), 2);
+    }
+
+    #[test]
+    fn registering_a_name_twice_is_int_040() {
+        let db = udf_db();
+        db.register_predicate("even?".into(), Arc::new(IsEven))
+            .expect("register");
+        let e = err(db.register_predicate("even?".into(), Arc::new(IsEven)));
+        assert!(msg(e).starts_with("[INT-040]"));
+        db.register_aggregate("total".into(), total(None, None))
+            .expect("aggregates have their own names");
+        let e = err(db.register_aggregate("total".into(), total(None, None)));
+        assert!(msg(e).starts_with("[INT-040]"));
     }
 
     #[test]
