@@ -51,6 +51,16 @@ case "${1:-}" in
       [ -f "$DIST/$f" ] || { echo "::error::$DIST has no $f"; exit 1; }
     done
     [ "$(cat "$DIST/VERSION")" = "$VERSION" ] || { echo "::error::dist is not version $VERSION"; exit 1; }
+    # The shared surface is in the built library: the override list and the
+    # prepared limit setters (minigraf#872).
+    SYMBOLS="$(nm -D --defined-only "$DIST/libminigraf_ffi.so")"
+    for sym in func_overridable_defaults \
+        method_minigrafpreparedquery_with_max_derived_facts \
+        method_minigrafpreparedquery_with_query_memory_limit \
+        method_minigrafpreparedquery_with_max_iterations; do
+      grep -q " uniffi_minigraf_ffi_fn_$sym\$" <<<"$SYMBOLS" \
+        || { echo "::error::libminigraf_ffi.so does not export $sym"; exit 1; }
+    done
     echo "template placeholder: dist-native holds version $VERSION"
     exit 0
     ;;

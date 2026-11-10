@@ -92,6 +92,24 @@ Every binding exposes the same objects, specified in minigraf's
   native set type as a plain bind value (minigraf#316);
 - `MiniGrafError` variants by core error category: `Storage`, `Query`, `Parse`,
   `Api` (bad arguments, closed objects, bind mistakes) and `Other` (internal).
+- `OpenOptions.allow_overrides: Option<Vec<Overridable>>` (`MaxDerivedFacts`, `MaxResults`,
+  `QueryMemoryLimit`, `MaxIterations`): the query keywords query text may use to override
+  settings. Absent, `overridable_defaults()` applies, the Rust `Overridable::DEFAULTS` read
+  from the core library (today `MaxDerivedFacts`, `MaxResults`, `MaxIterations`); a list
+  replaces it and an empty one refuses every keyword (`API-025`). Expose the defaults as a
+  language constant read from `overridable_defaults()`, never written out again
+  (minigraf#872);
+- `OpenOptions.transaction_chunk_facts` and `OpenOptions.max_iterations` (rounds per stratum
+  of a rule query, else `INT-020`; `i64::MAX` is no limit); a negative count is `API-017`;
+- `MiniGrafPreparedQuery.with_max_derived_facts(n)`, `with_query_memory_limit(bytes)` and
+  `with_max_iterations(n)`: each returns a new prepared query with that limit and leaves the
+  receiver unchanged; `i64::MAX` is no limit, a negative value `API-017`; not gated by
+  `allow_overrides`. A derived query keeps its database open, as any prepared query does:
+
+  ```python
+  reach = db.prepare("(query [:find ?x ?y :where (reach ?x ?y)])")
+  small = reach.with_max_derived_facts(10_000)  # reach is unchanged
+  ```
 - `MiniGrafDb.register_predicate(name, MiniGrafPredicate)` and
   `register_aggregate(name, MiniGrafAggregate)`: user functions written in the language
   (minigraf#180), described in the next section.
