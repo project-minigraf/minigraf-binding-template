@@ -156,6 +156,28 @@ without which they are not implementable outside Rust):
 | Kotlin | `interface MiniGrafPredicate` etc. (`MiniGrafPredicateImpl` is the Rust-side class) | the interfaces carry no `@Throws`: Kotlin throws `MiniGrafUdfException.Failed(msg)`; Java, which cannot throw that checked exception from them, throws an unchecked exception instead |
 | Swift | `protocol MiniGrafPredicate: AnyObject, Sendable` etc. | the methods are `throws`: throw `MiniGrafUdfError.Failed(msg:)`. An implementation is a class that is `Sendable` (immutable `final`, or `@unchecked Sendable` with its own locking) |
 
+## Write transactions
+
+`MiniGrafDb.begin_write()` / `begin_write_with(TxOptions { synchronous, chunk_facts })`
+return a `MiniGrafWriteTransaction` with `execute`, `commit`, `rollback` and `is_open`,
+built on core's `OwnedWriteTransaction` (minigraf#824; first in the release built on
+core v3.0.0, core commit `CORE_COMMIT`). Its behaviour, which every binding documents:
+
+- `execute` returns what `MiniGrafDb.execute` returns; a staged write returns
+  `{"ok":true}`, a query reads the staged state, a failed statement stages nothing and
+  leaves the transaction open. No cursors or prepared queries inside a transaction.
+- `commit` applies everything as one transaction (a failed commit rolls back);
+  `rollback` discards it. A finished transaction's `execute` and `commit` are API-018;
+  `rollback` does nothing. Freed while open, it rolls back. Commit is always explicit:
+  a language's scope form (Python `with`, Kotlin `use`, a Swift closure) rolls back on
+  exit unless committed.
+- While open it holds the write lock: on the thread that began it, and inside its own
+  statements' user functions, database calls are INT-001; other threads' writes and
+  begins wait, their queries read the committed state. It keeps its database open, and
+  rules registered in it survive a rollback.
+- Kotlin: the generated `close()` frees the object (and so rolls back unless
+  committed); add `beginWrite(options)` over `beginWriteWith`.
+
 ## Why not depend on `minigraf-ffi`?
 
 UniFFI's `setup_scaffolding!()` macro generates `extern "C"` symbols in the **final** cdylib
