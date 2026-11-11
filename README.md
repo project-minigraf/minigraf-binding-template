@@ -161,7 +161,7 @@ without which they are not implementable outside Rust):
 `MiniGrafDb.begin_write()` / `begin_write_with(TxOptions { synchronous, chunk_facts })`
 return a `MiniGrafWriteTransaction` with `execute`, `commit`, `rollback` and `is_open`,
 built on core's `OwnedWriteTransaction` (minigraf#824; first in the release built on
-core v3.0.0, core commit `639e7382`). Its behaviour, which every binding documents:
+core v3.0.0, core commit `32d71ce0`). Its behaviour, which every binding documents:
 
 - `execute` returns what `MiniGrafDb.execute` returns; a staged write returns
   `{"ok":true}`, a query reads the staged state, a failed statement stages nothing and
