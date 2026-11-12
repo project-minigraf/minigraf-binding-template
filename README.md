@@ -172,7 +172,8 @@ core v3.0.0, core commit `32d71ce0`). Its behaviour, which every binding documen
   a language's scope form (Python `with`, Kotlin `use`, a Swift closure) rolls back on
   exit unless committed.
 - While open it holds the write lock: on the thread that began it, and inside its own
-  statements' user functions, database calls are INT-001; other threads' writes and
+  statements' user functions, database calls are INT-001, and so are a user function's
+  calls of the transaction it runs in (`execute`, `commit`, `rollback`); other threads' writes and
   begins wait, their queries read the committed state. It keeps its database open, and
   rules registered in it survive a rollback.
 - Kotlin: the generated `close()` frees the object (and so rolls back unless
